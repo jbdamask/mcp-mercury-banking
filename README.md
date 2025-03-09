@@ -1,13 +1,19 @@
 # Mercury MCP Server
 
-This is a simple MCP (Mercury Control Protocol) server that provides access to Mercury bank accounts through the Mercury API.
+Python MCP (Mercury Control Protocol) server that provides access to Mercury bank accounts through the Mercury API. It's currently READ ONLY
+
+![](./img/mcp-mercury-claude.png)
+
+## Clients
+
+Any client that supports MCP should work but this has only been tested with Claude Desktop.
 
 ## Setup
 
 1. Clone this repository
-2. Install dependencies:
+2. Create new virtual environment, activate it and install dependencies:
    ```
-   pip install httpx python-dotenv mcp-sdk
+   pip install -r requirements.txt
    ```
 3. Create a `.env` file in the root directory with your Mercury API key:
    ```
@@ -17,47 +23,26 @@ This is a simple MCP (Mercury Control Protocol) server that provides access to M
 
 ## Usage
 
-### Running the server
+### Install on Claude Desktop
 
-Run the server with:
+Edit ~/Library/Application\ Support/Claude/claude_desktop_config.json and add the MCP server
 
-```bash
-python mcp-mercury.py
 ```
-
-### Available Resources
-
-- `mercury://accounts` - Lists all Mercury bank accounts
-
-### Available Tools
-
-- `get_account_details(account_id)` - Get detailed information about a specific account
-
-## Example Usage with MCP Client
-
-```python
-from mcp.client import Client
-
-async def main():
-    # Connect to the MCP server
-    client = await Client.connect("mercury")
-    
-    # List all accounts
-    accounts = await client.get_resource("mercury://accounts")
-    print(f"Found {len(accounts)} accounts:")
-    for account in accounts:
-        print(f"- {account['name']} ({account['id']}): {account['balance']['amount']} {account['balance']['currency']}")
-    
-    # Get details for a specific account
-    if accounts:
-        account_id = accounts[0]["id"]
-        details = await client.invoke_tool("get_account_details", {"account_id": account_id})
-        print(f"\nDetails for account {account_id}:")
-        print(details)
-
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+{
+  "mcpServers": {
+    "mercury": {
+      "command": "<fully qualified path>/uv",
+      "args": [
+        "run",
+        "--with",
+        "mcp[cli]",
+        "mcp",
+        "run",
+        "<fully qualified path>/mcp-mercury.py"
+      ]
+    }
+  }
+}
 ```
 
 ## Security Note

@@ -12,3 +12,4 @@ wheels/
 .vscode/
 .python-version
 mcp-server-mercury.log
+.DS_Store
