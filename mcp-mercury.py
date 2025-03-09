@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 from mcp import types
 import logging
+import json
 
 # Configure logging
 logging.basicConfig(
@@ -101,6 +102,17 @@ class MercuryClient:
             response = await client.get(
                 f"{API_BASE}/account/{account_id}/transaction/{transaction_id}",
                 headers=self.headers
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def get_statements(self, account_id: str) -> dict:
+        """Get statements for a specific account from Mercury."""
+        logger.info(f"Getting statements for account {account_id}")
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{API_BASE}/account/{account_id}/statements",
+                headers=self.headers,
             )
             response.raise_for_status()
             return response.json()
@@ -244,69 +256,64 @@ async def get_account_transactions(account_id: str, limit: int = 500, offset: in
 
 @mcp.tool()
 async def get_transaction(account_id: str, transaction_id: str) -> str:
-    """Get a specific transaction from a Mercury bank account
+    """
+    Get a specific transaction from Mercury.
     
     Args:
-        account_id: The ID of the account the transaction belongs to
-        transaction_id: The ID of the transaction to retrieve
+        account_id: The ID of the account.
+        transaction_id: The ID of the transaction.
+        
+    Returns:
+        The transaction details.
     """
     transaction = await mercury_client.get_transaction(account_id, transaction_id)
     logger.info(f"Found transaction: {transaction}")
     
-    # Format transaction for better readability
+    # Format the transaction for better readability
     formatted_transaction = {
         "id": transaction.get("id"),
         "amount": transaction.get("amount"),
         "counterpartyId": transaction.get("counterpartyId"),
-        "counterpartyName": transaction.get("counterpartyName"),
-        "counterpartyNickname": transaction.get("counterpartyNickname"),
-        "kind": transaction.get("kind"),
         "status": transaction.get("status"),
-        "createdAt": transaction.get("createdAt"),
-        "postedAt": transaction.get("postedAt"),
-        "estimatedDeliveryDate": transaction.get("estimatedDeliveryDate"),
-        "failedAt": transaction.get("failedAt"),
-        "reasonForFailure": transaction.get("reasonForFailure"),
-        "note": transaction.get("note"),
-        "externalMemo": transaction.get("externalMemo"),
-        "bankDescription": transaction.get("bankDescription"),
-        "mercuryCategory": transaction.get("mercuryCategory"),
-        "generalLedgerCodeName": transaction.get("generalLedgerCodeName"),
-        "compliantWithReceiptPolicy": transaction.get("compliantWithReceiptPolicy"),
-        "hasGeneratedReceipt": transaction.get("hasGeneratedReceipt"),
-        "dashboardLink": transaction.get("dashboardLink"),
+        "details": transaction.get("details", {}),
+        "currencyExchange": transaction.get("currencyExchange", {}),
+        "attachments": transaction.get("attachments", [])
     }
     
-    # Add details information if available
-    details = transaction.get("details")
-    if details:
-        if details.get("debitCardInfo"):
-            formatted_transaction["debitCardInfo"] = details.get("debitCardInfo")
-        if details.get("creditCardInfo"):
-            formatted_transaction["creditCardInfo"] = details.get("creditCardInfo")
+    return json.dumps(formatted_transaction, indent=2)
+
+@mcp.tool()
+async def get_statements(account_id: str) -> str:
+    """
+    Get statements for a specific account from Mercury.
     
-    # Add currency exchange information if available
-    currency_exchange = transaction.get("currencyExchangeInfo")
-    if currency_exchange:
-        formatted_transaction["currencyExchangeInfo"] = {
-            "convertedFromCurrency": currency_exchange.get("convertedFromCurrency"),
-            "convertedToCurrency": currency_exchange.get("convertedToCurrency"),
-            "convertedFromAmount": currency_exchange.get("convertedFromAmount"),
-            "convertedToAmount": currency_exchange.get("convertedToAmount"),
-            "exchangeRate": currency_exchange.get("exchangeRate"),
+    Args:
+        account_id: The ID of the account.
+        
+    Returns:
+        The account statements.
+    """
+    statements_data = await mercury_client.get_statements(account_id)
+    logger.info(f"Found statements: {statements_data}")
+    
+    statements = statements_data.get("statements", [])
+    
+    # Format the statements for better readability
+    formatted_statements = []
+    for statement in statements:
+        formatted_statement = {
+            "id": statement.get("id"),
+            "accountNumber": statement.get("accountNumber"),
+            "companyLegalName": statement.get("companyLegalName"),
+            "startDate": statement.get("startDate"),
+            "endDate": statement.get("endDate"),
+            "endingBalance": statement.get("endingBalance"),
+            "downloadUrl": statement.get("downloadUrl"),
+            "transactionCount": len(statement.get("transactions", [])),
         }
+        formatted_statements.append(formatted_statement)
     
-    # Add attachment information if available
-    attachments = transaction.get("attachments", [])
-    if attachments:
-        attachment_info = []
-        for attachment in attachments:
-            attachment_info.append(f"{attachment.get('fileName')} ({attachment.get('attachmentType')}): {attachment.get('url')}")
-        formatted_transaction["attachments"] = "\n".join(attachment_info)
-    
-    # Convert dictionary to a formatted string
-    transaction_str = "\n".join([f"{key}: {value}" for key, value in formatted_transaction.items() if value is not None])
-    return transaction_str
+    return json.dumps(formatted_statements, indent=2)
 
 if __name__ == "__main__":
     # Initialize and run the server
