@@ -117,6 +117,31 @@ class MercuryClient:
             response.raise_for_status()
             return response.json()
 
+    async def get_recipients(self) -> List[Dict[str, Any]]:
+        """Get all recipients from Mercury API"""
+        logger.info("Getting recipients from Mercury API")
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{API_BASE}/recipients",
+                headers=self.headers
+            )
+            response.raise_for_status()
+            data = response.json()
+            
+            # Return the recipients list from the response
+            return data.get("recipients", [])
+
+    async def get_recipient(self, recipient_id: str) -> Dict[str, Any]:
+        """Get a specific recipient from Mercury API"""
+        logger.info(f"Getting recipient {recipient_id} from Mercury API")
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{API_BASE}/recipient/{recipient_id}",
+                headers=self.headers
+            )
+            response.raise_for_status()
+            return response.json()
+
 # Initialize Mercury client
 mercury_client = MercuryClient(MERCURY_API_KEY)
 
@@ -314,6 +339,178 @@ async def get_statements(account_id: str) -> str:
         formatted_statements.append(formatted_statement)
     
     return json.dumps(formatted_statements, indent=2)
+
+@mcp.tool()
+async def list_recipients() -> str:
+    """List all Mercury recipients"""
+    recipients = await mercury_client.get_recipients()
+    logger.info(f"Found {len(recipients)} recipients")
+    
+    if not recipients:
+        return "No recipients found."
+    
+    # Format recipients for better readability
+    formatted_recipients = []
+    for recipient in recipients:
+        # Create a formatted recipient with all available properties
+        formatted_recipient = {
+            "id": recipient.get("id"),
+            "name": recipient.get("name"),
+            "nickname": recipient.get("nickname"),
+            "status": recipient.get("status"),
+            "emails": recipient.get("emails"),
+            "dateLastPaid": recipient.get("dateLastPaid"),
+            "defaultPaymentMethod": recipient.get("defaultPaymentMethod"),
+        }
+        
+        # Add payment method details if available
+        if "electronicRoutingInfo" in recipient:
+            formatted_recipient["electronicRoutingInfo"] = {
+                "accountNumber": recipient.get("electronicRoutingInfo", {}).get("accountNumber"),
+                "routingNumber": recipient.get("electronicRoutingInfo", {}).get("routingNumber"),
+                "bankName": recipient.get("electronicRoutingInfo", {}).get("bankName"),
+                "electronicAccountType": recipient.get("electronicRoutingInfo", {}).get("electronicAccountType"),
+            }
+            
+            # Add address if available
+            if recipient.get("electronicRoutingInfo", {}).get("address"):
+                formatted_recipient["electronicRoutingInfo"]["address"] = recipient.get("electronicRoutingInfo", {}).get("address")
+        
+        if "domesticWireRoutingInfo" in recipient:
+            formatted_recipient["domesticWireRoutingInfo"] = {
+                "bankName": recipient.get("domesticWireRoutingInfo", {}).get("bankName"),
+                "accountNumber": recipient.get("domesticWireRoutingInfo", {}).get("accountNumber"),
+                "routingNumber": recipient.get("domesticWireRoutingInfo", {}).get("routingNumber"),
+            }
+            
+            # Add address if available
+            if recipient.get("domesticWireRoutingInfo", {}).get("address"):
+                formatted_recipient["domesticWireRoutingInfo"]["address"] = recipient.get("domesticWireRoutingInfo", {}).get("address")
+        
+        if "internationalWireRoutingInfo" in recipient:
+            intl_wire_info = recipient.get("internationalWireRoutingInfo", {})
+            formatted_recipient["internationalWireRoutingInfo"] = {
+                "iban": intl_wire_info.get("iban"),
+                "swiftCode": intl_wire_info.get("swiftCode"),
+            }
+            
+            # Add correspondent info if available
+            if intl_wire_info.get("correspondentInfo"):
+                formatted_recipient["internationalWireRoutingInfo"]["correspondentInfo"] = intl_wire_info.get("correspondentInfo")
+            
+            # Add bank details if available
+            if intl_wire_info.get("bankDetails"):
+                formatted_recipient["internationalWireRoutingInfo"]["bankDetails"] = intl_wire_info.get("bankDetails")
+            
+            # Add address if available
+            if intl_wire_info.get("address"):
+                formatted_recipient["internationalWireRoutingInfo"]["address"] = intl_wire_info.get("address")
+            
+            # Add phone number if available
+            if intl_wire_info.get("phoneNumber"):
+                formatted_recipient["internationalWireRoutingInfo"]["phoneNumber"] = intl_wire_info.get("phoneNumber")
+            
+            # Add country specific details if available
+            if intl_wire_info.get("countrySpecific"):
+                formatted_recipient["internationalWireRoutingInfo"]["countrySpecific"] = intl_wire_info.get("countrySpecific")
+        
+        if "checkInfo" in recipient:
+            formatted_recipient["checkInfo"] = recipient.get("checkInfo")
+        
+        if "address" in recipient:
+            formatted_recipient["address"] = recipient.get("address")
+        
+        # Convert dictionary to a formatted JSON string with proper indentation
+        recipient_str = json.dumps(formatted_recipient, indent=2)
+        formatted_recipients.append(recipient_str)
+    
+    return "\n---\n".join(formatted_recipients)
+
+@mcp.tool()
+async def get_recipient(recipient_id: str) -> str:
+    """
+    Get a specific recipient from Mercury.
+    
+    Args:
+        recipient_id: The ID of the recipient.
+        
+    Returns:
+        The recipient details.
+    """
+    recipient = await mercury_client.get_recipient(recipient_id)
+    logger.info(f"Found recipient: {recipient}")
+    
+    # Format the recipient for better readability
+    # Include all fields from the response schema
+    formatted_recipient = {
+        "id": recipient.get("id"),
+        "name": recipient.get("name"),
+        "nickname": recipient.get("nickname"),
+        "status": recipient.get("status"),
+        "emails": recipient.get("emails"),
+        "dateLastPaid": recipient.get("dateLastPaid"),
+        "defaultPaymentMethod": recipient.get("defaultPaymentMethod"),
+    }
+    
+    # Add payment method details if available
+    if "electronicRoutingInfo" in recipient:
+        formatted_recipient["electronicRoutingInfo"] = {
+            "accountNumber": recipient.get("electronicRoutingInfo", {}).get("accountNumber"),
+            "routingNumber": recipient.get("electronicRoutingInfo", {}).get("routingNumber"),
+            "bankName": recipient.get("electronicRoutingInfo", {}).get("bankName"),
+            "electronicAccountType": recipient.get("electronicRoutingInfo", {}).get("electronicAccountType"),
+        }
+        
+        # Add address if available
+        if recipient.get("electronicRoutingInfo", {}).get("address"):
+            formatted_recipient["electronicRoutingInfo"]["address"] = recipient.get("electronicRoutingInfo", {}).get("address")
+    
+    if "domesticWireRoutingInfo" in recipient:
+        formatted_recipient["domesticWireRoutingInfo"] = {
+            "bankName": recipient.get("domesticWireRoutingInfo", {}).get("bankName"),
+            "accountNumber": recipient.get("domesticWireRoutingInfo", {}).get("accountNumber"),
+            "routingNumber": recipient.get("domesticWireRoutingInfo", {}).get("routingNumber"),
+        }
+        
+        # Add address if available
+        if recipient.get("domesticWireRoutingInfo", {}).get("address"):
+            formatted_recipient["domesticWireRoutingInfo"]["address"] = recipient.get("domesticWireRoutingInfo", {}).get("address")
+    
+    if "internationalWireRoutingInfo" in recipient:
+        intl_wire_info = recipient.get("internationalWireRoutingInfo", {})
+        formatted_recipient["internationalWireRoutingInfo"] = {
+            "iban": intl_wire_info.get("iban"),
+            "swiftCode": intl_wire_info.get("swiftCode"),
+        }
+        
+        # Add correspondent info if available
+        if intl_wire_info.get("correspondentInfo"):
+            formatted_recipient["internationalWireRoutingInfo"]["correspondentInfo"] = intl_wire_info.get("correspondentInfo")
+        
+        # Add bank details if available
+        if intl_wire_info.get("bankDetails"):
+            formatted_recipient["internationalWireRoutingInfo"]["bankDetails"] = intl_wire_info.get("bankDetails")
+        
+        # Add address if available
+        if intl_wire_info.get("address"):
+            formatted_recipient["internationalWireRoutingInfo"]["address"] = intl_wire_info.get("address")
+        
+        # Add phone number if available
+        if intl_wire_info.get("phoneNumber"):
+            formatted_recipient["internationalWireRoutingInfo"]["phoneNumber"] = intl_wire_info.get("phoneNumber")
+        
+        # Add country specific details if available
+        if intl_wire_info.get("countrySpecific"):
+            formatted_recipient["internationalWireRoutingInfo"]["countrySpecific"] = intl_wire_info.get("countrySpecific")
+    
+    if "checkInfo" in recipient:
+        formatted_recipient["checkInfo"] = recipient.get("checkInfo")
+    
+    if "address" in recipient:
+        formatted_recipient["address"] = recipient.get("address")
+    
+    # Convert dictionary to a formatted string with proper indentation
+    return json.dumps(formatted_recipient, indent=2)
 
 if __name__ == "__main__":
     # Initialize and run the server

@@ -1,6 +1,6 @@
 # Mercury MCP Server
 
-Python MCP (Mercury Control Protocol) server that provides access to Mercury bank accounts through the Mercury API. It's currently READ ONLY
+Python MCP (Model Control Protocol) server that provides access to Mercury bank accounts through the Mercury API. It's currently READ ONLY
 
 ![](./img/mcp-mercury-claude.png)
 
