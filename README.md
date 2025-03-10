@@ -13,6 +13,7 @@ Any client that supports MCP should work but this has only been tested with Clau
 1. Clone this repository
 2. Create new virtual environment, activate it and install dependencies:
    ```
+   python3 -m venv .venv && source .venv/bin/activate
    pip install -r requirements.txt
    ```
 3. Create a `.env` file in the root directory with your Mercury API key:
