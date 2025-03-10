@@ -187,6 +187,17 @@ class MercuryClient:
             response.raise_for_status()
             return response.json()
 
+    async def get_credit_data(self) -> Dict[str, Any]:
+        """Get credit data from Mercury API"""
+        logger.info("Getting credit data from Mercury API")
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{API_BASE}/credit",
+                headers=self.headers
+            )
+            response.raise_for_status()
+            return response.json()
+
 # Initialize Mercury client
 mercury_client = MercuryClient(MERCURY_API_KEY)
 
@@ -625,6 +636,37 @@ async def get_treasury_data() -> str:
     except Exception as e:
         logger.error(f"Error retrieving treasury data: {e}")
         raise ValueError(f"Error retrieving treasury data: {str(e)}")
+
+@mcp.tool()
+async def get_credit_data() -> str:
+    """Get Mercury credit account information"""
+    try:
+        credit_data = await mercury_client.get_credit_data()
+        logger.info(f"Credit data: {credit_data}")
+        
+        # Format the credit accounts for better readability
+        accounts = credit_data.get("accounts", [])
+        
+        if not accounts:
+            return "No credit accounts found."
+            
+        formatted_accounts = []
+        for account in accounts:
+            formatted_account = {
+                "id": account.get("id"),
+                "status": account.get("status"),
+                "availableBalance": account.get("availableBalance"),
+                "currentBalance": account.get("currentBalance"),
+                "createdAt": account.get("createdAt")
+            }
+            # Convert dictionary to a formatted string
+            account_str = "\n".join([f"{key}: {value}" for key, value in formatted_account.items() if value is not None])
+            formatted_accounts.append(account_str)
+        
+        return "\n---\n".join(formatted_accounts)
+    except Exception as e:
+        logger.error(f"Error getting credit data: {e}")
+        return f"Error getting credit data: {str(e)}"
 
 @mcp.resource("mercury://statements/{statement_id}")
 async def get_statement_pdf(statement_id: str) -> bytes:
