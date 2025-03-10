@@ -30,8 +30,31 @@ if not MERCURY_API_KEY:
 # Initialize FastMCP server
 mcp = FastMCP("mercury")
 
-# Constants
+# Mercury API base URL
 API_BASE = "https://api.mercury.com/api/v1"
+
+"""
+Mercury MCP Server
+
+This server provides access to the Mercury API through the Model Context Protocol (MCP).
+
+Available tools:
+- list_accounts: List all accounts
+- get_account: Get details for a specific account
+- get_account_cards: Get cards for a specific account
+- get_account_transactions: Get transactions for a specific account
+- get_transaction: Get details for a specific transaction
+- get_statements: Get statements for a specific account
+- download_statement_pdf: Download a statement PDF
+- list_recipients: List all recipients
+- get_recipient: Get details for a specific recipient
+
+Available resources:
+- mercury://statements/{statement_id}: Access statement PDFs directly
+  Returns: PDF file as a binary resource
+"""
+
+# Constants
 USER_AGENT = "mercury-app/1.0"
 
 class MercuryClient:
@@ -116,6 +139,17 @@ class MercuryClient:
             )
             response.raise_for_status()
             return response.json()
+
+    async def download_statement_pdf(self, statement_id: str) -> bytes:
+        """Download a statement PDF from Mercury."""
+        logger.info(f"Downloading statement PDF for statement {statement_id}")
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{API_BASE}/statements/{statement_id}/pdf",
+                headers=self.headers,
+            )
+            response.raise_for_status()
+            return response.content
 
     async def get_recipients(self) -> List[Dict[str, Any]]:
         """Get all recipients from Mercury API"""
@@ -341,6 +375,42 @@ async def get_statements(account_id: str) -> str:
     return json.dumps(formatted_statements, indent=2)
 
 @mcp.tool()
+async def download_statement_pdf(statement_id: str) -> str:
+    """
+    Download a statement PDF from Mercury.
+    
+    Args:
+        statement_id: The ID of the statement to download.
+        
+    Returns:
+        A message with the status of the download.
+    """
+    try:
+        pdf_content = await mercury_client.download_statement_pdf(statement_id)
+        
+        try:
+            # Try to use a temporary directory which is usually writable
+            import tempfile
+            
+            # Create a temporary file with a meaningful name
+            with tempfile.NamedTemporaryFile(
+                suffix=f"_statement_{statement_id}.pdf",
+                delete=False,
+                mode="wb"
+            ) as temp_file:
+                temp_file.write(pdf_content)
+                filename = temp_file.name
+            
+            return f"Statement PDF downloaded successfully and saved to {filename}"
+        except Exception as write_error:
+            # If we can't write to the file system, just return success without saving
+            logger.warning(f"Could not save PDF to file system: {write_error}")
+            return f"Statement PDF downloaded successfully (size: {len(pdf_content)} bytes). File system is read-only, so PDF was not saved to disk."
+    except Exception as e:
+        logger.error(f"Error downloading statement PDF: {e}")
+        return f"Error downloading statement PDF: {e}"
+
+@mcp.tool()
 async def list_recipients() -> str:
     """List all Mercury recipients"""
     recipients = await mercury_client.get_recipients()
@@ -511,6 +581,27 @@ async def get_recipient(recipient_id: str) -> str:
     
     # Convert dictionary to a formatted string with proper indentation
     return json.dumps(formatted_recipient, indent=2)
+
+@mcp.resource("mercury://statements/{statement_id}")
+async def get_statement_pdf(statement_id: str) -> bytes:
+    """
+    Get a statement PDF from Mercury.
+    
+    Args:
+        statement_id: The ID of the statement to download.
+        
+    Returns:
+        The PDF content as bytes.
+    """
+    logger.info(f"Fetching statement PDF with ID: {statement_id}")
+    
+    try:
+        # Download the PDF content
+        pdf_content = await mercury_client.download_statement_pdf(statement_id)
+        return pdf_content
+    except Exception as e:
+        logger.error(f"Error retrieving statement PDF: {e}")
+        raise ValueError(f"Error retrieving statement PDF: {str(e)}")
 
 if __name__ == "__main__":
     # Initialize and run the server
