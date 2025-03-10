@@ -176,6 +176,17 @@ class MercuryClient:
             response.raise_for_status()
             return response.json()
 
+    async def get_treasury_data(self) -> Dict[str, Any]:
+        """Get treasury data from Mercury API"""
+        logger.info("Getting treasury data from Mercury API")
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{API_BASE}/treasury",
+                headers=self.headers
+            )
+            response.raise_for_status()
+            return response.json()
+
 # Initialize Mercury client
 mercury_client = MercuryClient(MERCURY_API_KEY)
 
@@ -581,6 +592,39 @@ async def get_recipient(recipient_id: str) -> str:
     
     # Convert dictionary to a formatted string with proper indentation
     return json.dumps(formatted_recipient, indent=2)
+
+@mcp.tool()
+async def get_treasury_data() -> str:
+    """Get treasury account data from Mercury"""
+    try:
+        treasury_data = await mercury_client.get_treasury_data()
+        logger.info(f"Retrieved treasury data: {treasury_data}")
+        
+        accounts = treasury_data.get("accounts", [])
+        logger.info(f"Found {len(accounts)} treasury accounts")
+        
+        # Format treasury accounts for better readability
+        formatted_accounts = []
+        for account in accounts:
+            formatted_account = {
+                "id": account.get("id"),
+                "availableBalance": account.get("availableBalance"),
+                "currentBalance": account.get("currentBalance"),
+                "createdAt": account.get("createdAt"),
+                "status": account.get("status"),
+            }
+            # Convert dictionary to a formatted string
+            account_str = "\n".join([f"{key}: {value}" for key, value in formatted_account.items() if value is not None])
+            formatted_accounts.append(account_str)
+        
+        if formatted_accounts:
+            return "\n---\n".join(formatted_accounts)
+        else:
+            return "No treasury accounts found."
+    
+    except Exception as e:
+        logger.error(f"Error retrieving treasury data: {e}")
+        raise ValueError(f"Error retrieving treasury data: {str(e)}")
 
 @mcp.resource("mercury://statements/{statement_id}")
 async def get_statement_pdf(statement_id: str) -> bytes:
